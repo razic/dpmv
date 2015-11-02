@@ -28,3 +28,10 @@ $ dpmv
 
 USAGE: dpmv zonefile.txt nameserverA nameserverB
 ```
+
+[Dyn]: https://dyn.com
+[R53]: https://aws.amazon.com/route53/
+[AXFR]: https://en.wikipedia.org/wiki/DNS_zone_transfer
+[zone file]: https://en.wikipedia.org/wiki/Zone_file
+[zone files]: https://en.wikipedia.org/wiki/Zone_file
+[BIND]: https://en.wikipedia.org/wiki/BIND
