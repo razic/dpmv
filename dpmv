@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+function usage {
+  >&2 echo "USAGE: zonefile.txt nameserverA nameserverB"
+}
+
+# didn't pass three arguments
+if [[ "$#" -ne 3 ]]; then
+  usage
+  exit 1
+fi
+
+# the first argument isn't a file
+if [[ ! -f "$1" ]]; then
+  usage
+  exit 1
+fi
+
+ZONEFILE=$1
+NAMESERVERA=$2
+NAMESERVERB=$3
+GREPPATTERN='SOA|NS|^;|^$'
+NUMBERREGEX='^[0-9]+$'
+WORDREGEX='^[a-zA-Z]+$'
+COMMUNICATIONERROR=';; communications error'
+
+# loop through each line in the zonefile
+while read LINE; do
+  # empty line -- skipping
+  [[ $LINE == ""  ]] && continue
+
+  # checks if this is an origin declaration
+  if [[ "${LINE:0:7}" == "\$ORIGIN" ]]; then
+    # set the origin
+    ORIGIN="${LINE:8}"
+
+    # (re)set the suborigin
+    SUBORIGIN=""
+
+    # go to the next line in the zone file
+    continue
+  fi
+
+  FIRSTCOLUMN=$(echo "$LINE" | awk '{print $1}')
+  SECONDCOLUMN=$(echo "$LINE" | awk '{print $2}')
+
+  # only check to change the origin if it's not an @ symbol
+  if [[ $FIRSTCOLUMN != "@" ]]; then
+    # domain and ttl are pure digits (kind of a special case)
+    if [[ $FIRSTCOLUMN =~ $NUMBERREGEX && $SECONDCOLUMN =~ $NUMBERREGEX ]]; then
+      SUBORIGIN=$FIRSTCOLUMN
+    # origin is not excluded from the line
+    elif ! [[ $FIRSTCOLUMN =~ $NUMBERREGEX && $SECONDCOLUMN =~ $WORDREGEX ]]; then
+      SUBORIGIN=$FIRSTCOLUMN
+    # @ symbol means keep the old origin
+    fi
+  fi
+
+  FULLORIGIN=$ORIGIN
+
+  if [[ $SUBORIGIN != "" ]]; then
+    FULLORIGIN="$SUBORIGIN.$ORIGIN"
+  fi
+
+  # get the dns record output for the origin from nameserver 'a'
+  #ANSWERA=$(dig @$NAMESERVERA $FULLORIGIN any +noall +nocl +tcp +nottlid +answer)
+  ANSWERA=$COMMUNICATIONERROR
+  ANSWERB=$COMMUNICATIONERROR
+
+  # retry if we get network errors
+  until [[ $ANSWERA != *$COMMUNICATIONERROR* ]]; do
+    ANSWERA=$(dig @$NAMESERVERA $FULLORIGIN any +noall +nocl +nottlid +tcp +answer)
+  done
+
+  # get the dns record output for the origin from nameserver 'b'
+  #ANSWERB=$(dig @$NAMESERVERB $FULLORIGIN any +noall +nocl +nottlid +tcp +answer)
+
+  # retry if we get network errors
+  until [[ $ANSWERB != *$COMMUNICATIONERROR* ]]; do
+    ANSWERB=$(dig @$NAMESERVERB $FULLORIGIN any +noall +nottlid +nocl +tcp +answer)
+  done
+
+  # remove unwanted lines and sort the whole thing so it can be diffed
+  A=$(echo "${ANSWERA}" | grep -Ev "$GREPPATTERN" | grep "^$FULLORIGIN" | sort | awk '{print tolower($0)}')
+  B=$(echo "${ANSWERB}" | grep -Ev "$GREPPATTERN" | grep "^$FULLORIGIN" | sort | awk '{print tolower($0)}')
+
+  diff <(echo "$A") <(echo "$B")
+
+  if [[ $? -ne 0 ]]; then
+    echo "$ANSWERA"
+    echo "$ANSWERB"
+    echo
+  fi
+done <$ZONEFILE
