@@ -29,6 +29,21 @@ $ dpmv
 USAGE: dpmv zonefile.txt nameserverA nameserverB
 ```
 
+## Caveats
+
+Zone files are hard to parse. This script does not support multi-line resource
+records in the zone file. This is typically only with the SOA record anyway.
+
+```
+@                      3600 SOA   ns1.p23.dynect.net. (
+                              hostmaster.typekit.com.    ; address of responsible party
+                              202                        ; serial number
+                              3600                       ; refresh period
+                              600                        ; retry period
+                              604800                     ; expire time
+                              60                       ) ; minimum ttl
+```
+
 [Dyn]: https://dyn.com
 [R53]: https://aws.amazon.com/route53/
 [AXFR]: https://en.wikipedia.org/wiki/DNS_zone_transfer
